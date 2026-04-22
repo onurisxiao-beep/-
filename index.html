@@ -5,13 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>浴室預約監測系統</title>
     
-    <!-- 1. Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- 3. Firebase v9 Compat CDN (傳統寫法，不須 type="module") -->
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 
@@ -29,7 +26,6 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
 
-    <!-- 頂部導航列 -->
     <nav class="bg-white border-b sticky top-0 z-40 shadow-sm h-16">
         <div class="max-w-7xl mx-auto px-4 md:px-8 h-full flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -51,7 +47,6 @@
     </nav>
 
     <main class="p-4 md:p-8 max-w-7xl mx-auto">
-        <!-- 狀態統計區塊 -->
         <div class="bg-white rounded-2xl p-4 md:p-6 mb-8 shadow-sm border-2 border-slate-100">
             <div class="flex flex-wrap justify-center gap-6 md:gap-12 text-sm md:text-base mb-4">
                 <div class="flex items-center">
@@ -70,7 +65,6 @@
                     <span class="font-black text-slate-800">總計: <span id="stat-total">0</span></span>
                 </div>
             </div>
-            <!-- 貼心提醒文字 -->
             <div class="text-center pt-3 border-t border-slate-50">
                 <p class="text-slate-500 text-xs md:text-sm font-medium flex items-center justify-center gap-1 md:gap-2 flex-wrap">
                     <span class="text-blue-500 font-bold">💡 貼心提醒：</span>
@@ -79,24 +73,21 @@
             </div>
         </div>
 
-        <!-- 浴室卡片網格 -->
-        const firebaseConfig = {
-  apiKey: "AIzaSyAHGkKwqTMES6m9I-Qj4_udfz4FCP3r7u0",
-  authDomain: "bathroom-8eb82.firebaseapp.com",
-  projectId: "bathroom-8eb82",
-  storageBucket: "bathroom-8eb82.firebasestorage.app",
-  messagingSenderId: "389850070012",
-  appId: "1:389850070012:web:57b1d934aec90d6cb45079",
-  measurementId: "G-4WYZKH4B90"
-};
+        <div id="bathroomsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
+            <div class="col-span-full py-12 text-center text-slate-400 font-bold">連線中載入資料...</div>
+        </div>
+    </main>
 
     <script>
-        // --- 1. Firebase 初始化 ---
+        // --- 1. Firebase 初始化 (已換成你的真實金鑰) ---
         const firebaseConfig = {
-            projectId: "gen-lang-client-0032833070",
-            appId: "1:240981203760:web:2ad86004e537461d0c46f5",
-            apiKey: "AIzaSyA8j4vUy1RoRrFakAcR9Y2Uy2T75ywxU_E",
-            authDomain: "gen-lang-client-0032833070.firebaseapp.com"
+            apiKey: "AIzaSyAHGkKwqTMES6m9I-Qj4_udfz4FCP3r7u0",
+            authDomain: "bathroom-8eb82.firebaseapp.com",
+            projectId: "bathroom-8eb82",
+            storageBucket: "bathroom-8eb82.firebasestorage.app",
+            messagingSenderId: "389850070012",
+            appId: "1:389850070012:web:57b1d934aec90d6cb45079",
+            measurementId: "G-4WYZKH4B90"
         };
         
         firebase.initializeApp(firebaseConfig);
@@ -365,4 +356,3 @@
     </script>
 </body>
 </html>
-
