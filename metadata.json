@@ -1,0 +1,6 @@
+{
+  "name": "Bathroom",
+  "description": "即時浴室預約與狀態監測系統，支援冷卻計時、管理員模式與即時 Firebase 同步。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

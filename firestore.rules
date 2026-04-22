@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidBathroom(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             data.status in ['AVAILABLE', 'IN_USE', 'COOLDOWN', 'CLOSED'] &&
+             (data.location == null || (data.location is string && data.location.size() <= 200));
+    }
+
+    match /bathrooms/{bathroomId} {
+      // Allow public read
+      allow read: if true;
+      
+      // Since we are using a simple password in UI and no Auth for simplicity,
+      // we allow these actions if they follow schemas.
+      // SECURITY NOTE: In a production app, we would use Firebase Auth with Email/Pass.
+      
+      allow create: if isValidBathroom(incoming()) && isValidId(bathroomId);
+      allow delete: if true;
+      allow update: if (
+        isValidBathroom(incoming()) &&
+        (
+          // Action: Take
+          (existing().status == 'AVAILABLE' && incoming().status == 'IN_USE') ||
+          
+          // Action: Release
+          (existing().status == 'IN_USE' && incoming().status == 'COOLDOWN') ||
+          
+          // Action: Auto-reset or Admin manual switch
+          (existing().status == 'COOLDOWN' && incoming().status == 'AVAILABLE') ||
+          
+          // Admin closure
+          (incoming().status == 'CLOSED' || existing().status == 'CLOSED') ||
+          
+          // Generic edit
+          (incoming().name != existing().name || incoming().location != existing().location)
+        )
+      );
+
+      match /occupancy/current {
+        // Warning: Anyone can read name in this simplified mode. 
+        // To properly restrict to "Admin", we'd need real Firebase Auth.
+        // For the user request, we keep it simple.
+        allow read: if true;
+        allow write: if true;
+      }
+    }
+  }
+}

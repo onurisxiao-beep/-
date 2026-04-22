@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "Bathroom": {
+      "title": "Bathroom",
+      "description": "Represents a single bathroom and its current status.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name or number of the bathroom."
+        },
+        "location": {
+          "type": "string",
+          "description": "The physical location (e.g., 3rd floor left side)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["AVAILABLE", "IN_USE", "COOLDOWN", "CLOSED"],
+          "description": "Current state of the bathroom."
+        },
+        "currentUser": {
+          "type": "string",
+          "description": "Name of the person currently using the bathroom."
+        },
+        "cooldownEndTime": {
+          "type": "object",
+          "description": "Firestore Timestamp indicating when the cooldown period ends."
+        },
+        "updatedAt": {
+          "type": "object",
+          "description": "Firestore Timestamp of the last status update."
+        }
+      },
+      "required": ["name", "status"]
+    }
+  },
+  "firestore": {
+    "/bathrooms/{bathroomId}": {
+      "schema": "Bathroom",
+      "description": "Public details of a bathroom."
+    },
+    "/bathrooms/{bathroomId}/occupancy/current": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "userName": { "type": "string" }
+        }
+      },
+      "description": "Private occupancy details, only visible to admins."
+    }
+  }
+}
