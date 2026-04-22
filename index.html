@@ -1,13 +1,364 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>浴室預約監測系統</title>
+    
+    <!-- 1. Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- 3. Firebase v9 Compat CDN (傳統寫法，不須 type="module") -->
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* 客製化紅點閃爍動畫 */
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .5; transform: scale(1.2); }
+        }
+        .animate-pulse-red { 
+            animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+        }
+        body { font-family: system-ui, -apple-system, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <!-- 頂部導航列 -->
+    <nav class="bg-white border-b sticky top-0 z-40 shadow-sm h-16">
+        <div class="max-w-7xl mx-auto px-4 md:px-8 h-full flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2 rounded-xl text-white shadow-md">
+                    <i data-lucide="droplets" class="w-6 h-6"></i>
+                </div>
+                <h1 class="text-xl md:text-2xl font-black tracking-tight text-slate-800">Bathroom</h1>
+            </div>
+            <div class="flex gap-2">
+                <button id="addBtn" onclick="addBathroom()" class="hidden px-4 ml-2 py-2 bg-blue-600 text-white rounded-xl font-bold shadow hover:bg-blue-700 transition">
+                    + 新增浴室
+                </button>
+                <button id="adminBtn" onclick="toggleAdmin()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition flex items-center gap-2">
+                    <i data-lucide="shield" class="w-4 h-4"></i>
+                    <span id="adminBtnText">管理員模式</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="p-4 md:p-8 max-w-7xl mx-auto">
+        <!-- 狀態統計區塊 -->
+        <div class="bg-white rounded-2xl p-4 md:p-6 mb-8 shadow-sm border-2 border-slate-100">
+            <div class="flex flex-wrap justify-center gap-6 md:gap-12 text-sm md:text-base mb-4">
+                <div class="flex items-center">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500 mr-2 md:mr-3"></span>
+                    <span class="font-bold text-slate-700">空閒: <span id="stat-available">0</span></span>
+                </div>
+                <div class="flex items-center">
+                    <span class="w-3 h-3 rounded-full bg-rose-500 mr-2 md:mr-3"></span>
+                    <span class="font-bold text-slate-700">使用中: <span id="stat-inuse">0</span></span>
+                </div>
+                <div class="flex items-center">
+                    <span class="w-3 h-3 rounded-full bg-amber-500 mr-2 md:mr-3"></span>
+                    <span class="font-bold text-slate-700">冷卻中: <span id="stat-cooldown">0</span></span>
+                </div>
+                <div class="flex items-center border-l pl-6 md:pl-12 border-slate-200">
+                    <span class="font-black text-slate-800">總計: <span id="stat-total">0</span></span>
+                </div>
+            </div>
+            <!-- 貼心提醒文字 -->
+            <div class="text-center pt-3 border-t border-slate-50">
+                <p class="text-slate-500 text-xs md:text-sm font-medium flex items-center justify-center gap-1 md:gap-2 flex-wrap">
+                    <span class="text-blue-500 font-bold">💡 貼心提醒：</span>
+                    為方便各位同仁不要撲空或洗到冷水，請配合登記，登記「名稱」自訂，使用後請使用登記「名稱」結束使用。
+                </p>
+            </div>
+        </div>
+
+        <!-- 浴室卡片網格 -->
+        <div id="bathroomsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
+            <!-- 卡片由 JavaScript 動態產生 -->
+            <div class="col-span-full py-12 text-center text-slate-400 font-bold">連線中載入資料...</div>
+        </div>
+    </main>
+
+    <script>
+        // --- 1. Firebase 初始化 ---
+        const firebaseConfig = {
+            projectId: "gen-lang-client-0032833070",
+            appId: "1:240981203760:web:2ad86004e537461d0c46f5",
+            apiKey: "AIzaSyA8j4vUy1RoRrFakAcR9Y2Uy2T75ywxU_E",
+            authDomain: "gen-lang-client-0032833070.firebaseapp.com"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // --- 2. 全域狀態變數 ---
+        let bathrooms = [];
+        let isAdmin = false;
+
+        // --- 3. 工具函式：防 XSS 攻擊字串跳脫 ---
+        function escapeHtml(unsafe) {
+            if(!unsafe) return '';
+            return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // --- 4. 時間與倒數格式化 ---
+        function formatTimeRemaining(timestampObj) {
+            if (!timestampObj) return "30:00";
+            let endMs;
+            if (timestampObj.toMillis) {
+                endMs = timestampObj.toMillis();
+            } else if (timestampObj.seconds) { 
+                endMs = timestampObj.seconds * 1000;
+            } else { return "30:00"; }
+
+            const diff = endMs - Date.now();
+            if (diff <= 0) return "00:00";
+            
+            const m = Math.floor(diff / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            return m.toString().padStart(2, '0') + ':' + s.toString().padStart(2, '0');
+        }
+
+        // --- 5. 資料庫監聽與介面渲染邏輯 ---
+        db.collection("bathrooms").orderBy("name").onSnapshot((snapshot) => {
+            bathrooms = [];
+            snapshot.forEach((doc) => {
+                bathrooms.push({ id: doc.id, ...doc.data() });
+            });
+            updateStats();
+            renderBathrooms();
+        });
+
+        function updateStats() {
+            let available = 0, inUse = 0, cooldown = 0;
+            bathrooms.forEach(b => {
+                if(b.status === 'AVAILABLE') available++;
+                else if(b.status === 'IN_USE') inUse++;
+                else if(b.status === 'COOLDOWN') cooldown++;
+            });
+            document.getElementById('stat-available').innerText = available;
+            document.getElementById('stat-inuse').innerText = inUse;
+            document.getElementById('stat-cooldown').innerText = cooldown;
+            document.getElementById('stat-total').innerText = bathrooms.length;
+        }
+
+        function renderBathrooms() {
+            const grid = document.getElementById('bathroomsGrid');
+            grid.innerHTML = '';
+
+            if (bathrooms.length === 0) {
+                grid.innerHTML = '<div class="col-span-full py-12 text-center text-slate-400 font-bold">目前尚未建立任何浴室資料。</div>';
+                return;
+            }
+
+            bathrooms.forEach(b => {
+                let borderClass = '', statusLabel = '', statusColor = '', btnHtml = '', centerHtml = '';
+
+                if (b.status === 'AVAILABLE') {
+                    borderClass = 'border-emerald-500'; statusColor = 'text-emerald-600'; statusLabel = '空閒中';
+                    centerHtml = `<div class="flex-1 flex items-center justify-center py-4"><i data-lucide="check-circle-2" class="w-16 h-16 text-emerald-100"></i></div>`;
+                    btnHtml = `<button onclick="reserveBathroom('${b.id}')" class="w-full py-4 rounded-xl text-base font-bold text-white bg-emerald-500 shadow-md hover:bg-emerald-600 active:scale-95 transition-all">立即預約</button>`;
+                } 
+                else if (b.status === 'IN_USE') {
+                    borderClass = 'border-rose-500'; statusColor = 'text-rose-600'; statusLabel = '使用中';
+                    const occName = isAdmin ? (b.occupantName || '讀取中...') : '使用中 (已遮蔽)';
+                    centerHtml = `
+                        <div class="bg-rose-50 rounded-2xl p-6 text-center flex flex-col justify-center flex-1 h-full min-h-[100px]">
+                            <p class="text-2xl font-black text-rose-700 truncate">${escapeHtml(occName)}</p>
+                            <div class="mt-2 flex items-center justify-center gap-2">
+                                <div class="w-2 h-2 rounded-full bg-rose-500 animate-pulse-red"></div>
+                                <span class="text-xs font-bold text-rose-500 uppercase tracking-wider">In Progress</span>
+                            </div>
+                        </div>`;
+                    btnHtml = `<button onclick="finishBathroom('${b.id}')" class="w-full py-4 rounded-xl text-base font-bold text-white bg-rose-500 shadow-md hover:bg-rose-600 active:scale-95 transition-all">結束使用</button>`;
+                } 
+                else if (b.status === 'COOLDOWN') {
+                    borderClass = 'border-amber-500'; statusColor = 'text-amber-600'; statusLabel = '冷卻中';
+                    centerHtml = `
+                        <div class="flex-1 flex flex-col items-center justify-center py-4">
+                            <div class="text-5xl font-black text-amber-600 font-mono tracking-tighter italic">${formatTimeRemaining(b.cooldownEndTime)}</div>
+                            <p class="text-[10px] uppercase font-black tracking-widest text-amber-500 mt-2">冷卻倒數</p>
+                        </div>`;
+                    if (isAdmin) {
+                        btnHtml = `<button onclick="resetCooldown('${b.id}')" class="w-full py-4 rounded-xl text-base font-bold text-white bg-amber-500 shadow-md hover:bg-amber-600 active:scale-95 transition-all">提前結束冷卻</button>`;
+                    } else {
+                        btnHtml = `<button disabled class="w-full py-4 rounded-xl text-base font-bold text-slate-400 bg-slate-200 cursor-not-allowed">冷卻中...</button>`;
+                    }
+                } 
+                else if (b.status === 'CLOSED') {
+                    borderClass = 'border-slate-500'; statusColor = 'text-slate-600'; statusLabel = '維護中';
+                    centerHtml = `<div class="bg-slate-50 rounded-2xl p-6 text-center flex flex-col justify-center items-center flex-1"><i data-lucide="construction" class="w-12 h-12 text-slate-300 mb-2"></i><p class="text-slate-500 font-bold text-sm">暫停開放</p></div>`;
+                    btnHtml = `<button disabled class="w-full py-4 rounded-xl text-base font-bold text-slate-500 bg-slate-300 cursor-not-allowed shadow-none">維護中</button>`;
+                }
+
+                // 管理員專屬按鈕列
+                let adminToolbar = '';
+                if(isAdmin) {
+                    adminToolbar = `
+                        <div class="absolute top-2 left-2 flex gap-1 z-10">
+                            <button onclick="toggleClosed('${b.id}', '${b.status}')" class="p-2 ${b.status === 'CLOSED'?'bg-emerald-50 text-emerald-600':'bg-slate-50 text-slate-600'} rounded-xl hover:bg-slate-200" title="開啟/關閉維護">
+                                <i data-lucide="${b.status === 'CLOSED' ? 'navigation' : 'lock'}" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteBathroom('${b.id}')" class="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-200" title="刪除">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>`;
+                }
+
+                // 組合卡片 HTML
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-[2rem] p-4 md:p-6 shadow-xl border-t-8 ${borderClass} relative flex flex-col h-[360px]`;
+                card.innerHTML = `
+                    ${adminToolbar}
+                    <div class="absolute top-5 right-6 text-[10px] font-black uppercase tracking-[0.2em] ${statusColor}">${statusLabel}</div>
+                    
+                    <div class="mb-4 mt-8 md:mt-4 text-center md:text-left">
+                        <h3 class="text-2xl font-bold text-slate-800 flex items-center justify-center md:justify-start gap-2 mb-1">
+                            <i data-lucide="navigation" class="w-5 h-5 text-slate-400"></i>
+                            <span>${escapeHtml(b.location || '浴室區')}</span>
+                        </h3>
+                        <p class="text-sm text-slate-400 font-medium">代號: ${escapeHtml(b.name)}</p>
+                    </div>
+
+                    ${centerHtml}
+
+                    <div class="mt-4">${btnHtml}</div>
+                `;
+                grid.appendChild(card);
+            });
+
+            // 觸發圖標渲染
+            lucide.createIcons();
+        }
+
+        // --- 6. 事件監聽與每秒更新冷卻畫面 ---
+        setInterval(() => {
+            let configNeedsUpdate = false;
+            const nowMs = Date.now();
+            
+            bathrooms.forEach(b => {
+                if (b.status === 'COOLDOWN') {
+                    // 自動時間到達空閒的檢查
+                    let endMs = b.cooldownEndTime && b.cooldownEndTime.toMillis ? b.cooldownEndTime.toMillis() : 0;
+                    if (nowMs >= endMs) {
+                        try {
+                            db.collection('bathrooms').doc(b.id).update({
+                                status: 'AVAILABLE',
+                                cooldownEndTime: null
+                            });
+                        } catch(e) {}
+                    } else {
+                        configNeedsUpdate = true; // 時間還沒到，指示UI重新渲染數字
+                    }
+                }
+            });
+            if(configNeedsUpdate) renderBathrooms();
+        }, 1000);
+
+        // --- 7. 按鈕互動邏輯 ---
+        function toggleAdmin() {
+            if (isAdmin) {
+                isAdmin = false;
+                document.getElementById("adminBtnText").innerText = "管理員登入";
+                document.getElementById("adminBtn").className = "px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition flex items-center gap-2";
+                document.getElementById("addBtn").classList.add("hidden");
+            } else {
+                const pass = prompt("請輸入管理員密碼：");
+                if (pass === "2056001") {
+                    isAdmin = true;
+                    document.getElementById("adminBtnText").innerText = "登出管理員";
+                    document.getElementById("adminBtn").className = "px-4 py-2 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition flex items-center gap-2 shadow-lg shadow-rose-200";
+                    document.getElementById("addBtn").classList.remove("hidden");
+                } else if (pass !== null) {
+                    alert("密碼錯誤或取消");
+                }
+            }
+            renderBathrooms();
+        }
+
+        function reserveBathroom(id) {
+            const name = prompt("為方便同仁不撲空，請自訂一個您的「登記名稱」：");
+            if(name === null || name.trim() === "") return;
+            db.collection("bathrooms").doc(id).update({
+                status: 'IN_USE',
+                occupantName: name.trim(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        function finishBathroom(id) {
+            const target = bathrooms.find(b => b.id === id);
+            if(!isAdmin) {
+                const checkName = prompt("請輸入您當初登記的「名稱」以結束使用：");
+                if(checkName === null) return; // 使用者按取消
+                if(target && target.occupantName !== checkName.trim()) {
+                    alert("⚠️ 名稱不符，無法結束使用！\n若您忘記名稱，請聯繫管理員處理。");
+                    return;
+                }
+            } else {
+                if(!confirm(`管理員權限：\n是否強制結束 [${target.location}] 的使用狀態？`)) return;
+            }
+
+            const cooldownLimit = new Date(Date.now() + 30 * 60 * 1000);
+            db.collection("bathrooms").doc(id).update({
+                status: 'COOLDOWN',
+                occupantName: null,
+                cooldownEndTime: firebase.firestore.Timestamp.fromDate(cooldownLimit),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        function addBathroom() {
+            if(!isAdmin) return;
+            const bName = prompt("請輸入新浴室的名稱代號 (例如：A1)：");
+            if(!bName) return;
+            const bLoc = prompt("請輸入浴室的顯示位置 (例如：一樓大廳左側)：");
+            
+            db.collection("bathrooms").add({
+                name: bName.trim(),
+                location: (bLoc || "").trim(),
+                status: 'AVAILABLE',
+                occupantName: null,
+                cooldownEndTime: null,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        function toggleClosed(id, currentStatus) {
+            if(!isAdmin) return;
+            const isClosed = currentStatus === 'CLOSED';
+            db.collection("bathrooms").doc(id).update({
+                status: isClosed ? 'AVAILABLE' : 'CLOSED',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        function resetCooldown(id) {
+            if(!isAdmin) return;
+            if(!confirm("確定要現在結束冷卻，強制開放使用嗎？")) return;
+            db.collection("bathrooms").doc(id).update({
+                status: 'AVAILABLE',
+                cooldownEndTime: null,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        function deleteBathroom(id) {
+            if(!isAdmin) return;
+            if(confirm("⚠️ 警告：確定要永久刪除這間浴室嗎？這無法還原！")) {
+                db.collection("bathrooms").doc(id).delete();
+            }
+        }
+        
+    </script>
+</body>
 </html>
 
