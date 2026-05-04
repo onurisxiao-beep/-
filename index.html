@@ -175,11 +175,11 @@
                     btnHtml = `<button onclick="finishBathroom('${b.id}')" class="w-full py-4 rounded-xl text-base font-bold text-white bg-rose-500 shadow-md hover:bg-rose-600 active:scale-95 transition-all">結束使用</button>`;
                 } 
                 else if (b.status === 'COOLDOWN') {
-                    borderClass = 'border-amber-500'; statusColor = 'text-amber-600'; statusLabel = '冷卻中';
+                    borderClass = 'border-amber-500'; statusColor = 'text-amber-600'; statusLabel = '熱水加熱中';
                     centerHtml = `
                         <div class="flex-1 flex flex-col items-center justify-center py-4">
                             <div class="text-5xl font-black text-amber-600 font-mono tracking-tighter italic">${formatTimeRemaining(b.cooldownEndTime)}</div>
-                            <p class="text-[10px] uppercase font-black tracking-widest text-amber-500 mt-2">冷卻倒數</p>
+                            <p class="text-[10px] uppercase font-black tracking-widest text-amber-500 mt-2">加熱倒數</p>
                         </div>`;
                     if (isAdmin) {
                         btnHtml = `<button onclick="resetCooldown('${b.id}')" class="w-full py-4 rounded-xl text-base font-bold text-white bg-amber-500 shadow-md hover:bg-amber-600 active:scale-95 transition-all">提前結束冷卻</button>`;
@@ -279,7 +279,7 @@
         }
 
         function reserveBathroom(id) {
-            const name = prompt("為方便同仁不撲空，請自訂一個您的「登記名稱」：");
+            const name = prompt("為方便同仁不撲空，請自訂一個您的「登記名稱」並請記住它：");
             if(name === null || name.trim() === "") return;
             db.collection("bathrooms").doc(id).update({
                 status: 'IN_USE',
@@ -294,14 +294,14 @@
                 const checkName = prompt("請輸入您當初登記的「名稱」以結束使用：");
                 if(checkName === null) return; // 使用者按取消
                 if(target && target.occupantName !== checkName.trim()) {
-                    alert("⚠️ 名稱不符，無法結束使用！\n若您忘記名稱，請聯繫管理員處理。");
+                    alert("⚠️ 名稱不符，無法結束使用！\n若您忘記名稱，請聯繫宿舍管理員處理。");
                     return;
                 }
             } else {
                 if(!confirm(`管理員權限：\n是否強制結束 [${target.location}] 的使用狀態？`)) return;
             }
 
-            const cooldownLimit = new Date(Date.now() + 30 * 60 * 1000);
+            const cooldownLimit = new Date(Date.now() + 15 * 60 * 1000);
             db.collection("bathrooms").doc(id).update({
                 status: 'COOLDOWN',
                 occupantName: null,
@@ -346,7 +346,7 @@ function addBathroom() {
 
         function resetCooldown(id) {
             if(!isAdmin) return;
-            if(!confirm("確定要現在結束冷卻，強制開放使用嗎？")) return;
+            if(!confirm("確定要現在結束加熱等待時間，強制開放使用嗎？")) return;
             db.collection("bathrooms").doc(id).update({
                 status: 'AVAILABLE',
                 cooldownEndTime: null,
