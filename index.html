@@ -105,13 +105,13 @@
 
         // --- 4. 時間與倒數格式化 ---
         function formatTimeRemaining(timestampObj) {
-            if (!timestampObj) return "30:00";
+            if (!timestampObj) return "15:00";
             let endMs;
             if (timestampObj.toMillis) {
                 endMs = timestampObj.toMillis();
             } else if (timestampObj.seconds) { 
                 endMs = timestampObj.seconds * 1000;
-            } else { return "30:00"; }
+            } else { return "15:00"; }
 
             const diff = endMs - Date.now();
             if (diff <= 0) return "00:00";
